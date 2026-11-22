@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ckb" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ڕێبەر</title>
+<meta name="theme-color" content="#1d4a38">
+<meta name="description" content="ڕێبەر: دۆزینەوەی ڕێگا لە نێوان شارەکانی هەرێمی کوردستان بە BFS و Dijkstra">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ڕێبەر">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;700;800&family=Noto+Naskh+Arabic:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mist:#e6ece6; --paper:#f8faf7; --zagros:#1d4a38; --zagros-2:#2c6a52; --slate:#33434a; --muted:#6f7e78;
+    --sun:#e5a400; --crimson:#c4122f; --water:#a9cbdc; --rule:#cfd9d1;
+    --erbil:#b4533c; --sul:#2e7d7a; --duhok:#6e4e9e; --halabja:#7c8b2e; --kirkuk:#56707f;
+    --kufi:"Noto Kufi Arabic",system-ui,sans-serif; --naskh:"Noto Naskh Arabic",Georgia,serif;
+    --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+    --bar:56px; --peek:260px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+  body{background:var(--paper);color:var(--slate);font-family:var(--kufi);font-size:15px;line-height:1.6;
+    -webkit-user-select:none;user-select:none;-webkit-text-size-adjust:100%}
+  button,select,input{font:inherit;color:inherit}
+  button{touch-action:manipulation}
+  :focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+
+  /* ---------- app bar ---------- */
+  .appbar{position:fixed;inset:0 0 auto 0;height:calc(var(--bar) + var(--st));padding:var(--st) 12px 0 8px;z-index:30;
+    background:var(--zagros);color:#fff;display:flex;align-items:center;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  .appbar .logo{width:34px;height:34px;flex:none}
+  .appbar .ttl{flex:1;min-width:0;line-height:1.15}
+  .appbar .ttl b{display:block;font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .appbar .ttl small{display:block;font-size:11.5px;color:#b9d6c6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .iconbtn{width:42px;height:42px;border-radius:50%;border:0;background:transparent;color:inherit;cursor:pointer;
+    display:grid;place-items:center;flex:none}
+  .iconbtn:active{background:rgba(255,255,255,.14)}
+  .install{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:999px;padding:4px 12px;
+    font-size:13px;font-weight:600;cursor:pointer;display:none;flex:none}
+
+  /* ---------- map ---------- */
+  .mapview{position:fixed;left:0;right:0;top:calc(var(--bar) + var(--st));bottom:calc(var(--peek) - 18px);background:var(--paper);z-index:1}
+  svg#map{display:block;width:100%;height:100%;cursor:grab;touch-action:none;--f:1}
+  svg#map.drag{cursor:grabbing}
+  .zoom{position:absolute;bottom:26px;left:12px;display:flex;flex-direction:column;gap:6px}
+  .result[hidden]{display:none}
+  .zoom button{width:40px;height:40px;border-radius:12px;border:1px solid var(--rule);background:rgba(248,250,247,.94);
+    color:var(--zagros);font:700 19px/1 var(--kufi);cursor:pointer;box-shadow:0 2px 6px rgba(29,74,56,.12)}
+
+  .contour{fill:none;stroke:#c6d3c7;stroke-width:calc(1px * var(--f,1))}
+  .contour.major{stroke:#b2c3b4;stroke-width:calc(1.3px * var(--f,1))}
+  .peak{font:500 11px var(--kufi);fill:#7f927f}
+  .river{fill:none;stroke:var(--water);stroke-width:calc(3px * var(--f,1));stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+  .lake{fill:var(--water);opacity:.85}
+  .road{stroke:#fff;stroke-width:calc(6px * var(--f,1));stroke-linecap:round}
+  .road-core{stroke:#b9b2a2;stroke-width:calc(2px * var(--f,1));stroke-linecap:round;transition:stroke .3s,stroke-width .3s}
+  .road-core.explored{stroke:#d9a62a;stroke-width:calc(3px * var(--f,1));stroke-dasharray:1 6}
+  .road-core.bfs{stroke:var(--sun);stroke-width:calc(8px * var(--f,1))}
+  .road-dj{stroke:var(--crimson);stroke-width:calc(3.5px * var(--f,1));stroke-linecap:round;display:none}
+  .road-dj.on{display:inline}
+  .km{font:500 10px system-ui;fill:#8b948e;paint-order:stroke;stroke:var(--paper);stroke-width:3px;pointer-events:none}
+  .city{cursor:pointer}
+  .city text.n{font-family:var(--kufi);font-weight:700;fill:var(--slate);paint-order:stroke;stroke:var(--paper);stroke-width:4.5px;stroke-linejoin:round;pointer-events:none}
+  .city text.n.cap{font-weight:800;fill:#22323a}
+  .lv{font:800 10px system-ui;fill:#fff;pointer-events:none}
+  .ripple{fill:none;stroke:var(--sun);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:rip .9s ease-out forwards}
+  @keyframes rip{from{transform:scale(.4);opacity:1}to{transform:scale(2.6);opacity:0}}
+
+  /* ---------- bottom sheet ---------- */
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;height:min(88dvh,calc(100dvh - var(--bar) - var(--st) - 16px));
+    background:var(--paper);border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(29,74,56,.22);
+    display:flex;flex-direction:column;transform:translateY(calc(100% - var(--peek)));transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+  .sheet.open{transform:translateY(0)}
+  .sheet.dragging{transition:none}
+  .grab{flex:none;height:26px;display:grid;place-items:center;cursor:grab;touch-action:none}
+  .grab span{width:42px;height:5px;border-radius:3px;background:#c3cec6}
+  .peek{flex:none;padding:0 16px 10px}
+  .more{flex:1;overflow:hidden;padding:4px 16px calc(24px + var(--sb));border-top:1px solid var(--rule)}
+  .sheet.open .more{overflow:auto;-webkit-user-select:text;user-select:text}
+
+  .od{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:center}
+  .pin{width:14px;height:14px;border-radius:50%;border:3px solid var(--zagros);background:#fff;grid-column:1}
+  .pin.to{border-color:var(--crimson);background:var(--crimson);box-shadow:0 0 0 3px #fff inset}
+  .od select{width:100%;font-size:15px;font-weight:500;border:1px solid var(--rule);border-radius:12px;padding:7px 10px;background:#fff;min-height:42px}
+  .swap{grid-row:1/3;grid-column:3;width:40px;height:40px;border-radius:50%;border:1px solid var(--rule);background:#fff;color:var(--zagros);cursor:pointer;font-size:18px}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .btn{font-weight:700;font-size:14px;border-radius:14px;padding:11px 8px;cursor:pointer;border:2px solid transparent;line-height:1.35;min-height:48px}
+  .btn small{display:block;font-size:11px;font-weight:500;opacity:.8}
+  .btn.bfs{background:var(--zagros);color:#fff}
+  .btn.dj{background:#fff;color:var(--crimson);border-color:var(--crimson)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .msg{margin-top:10px;font-size:13px;line-height:1.55;min-height:3.1em;padding-right:10px;border-right:3px solid var(--rule);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .msg.ok{border-right-color:var(--zagros)} .msg.bad{border-right-color:var(--crimson);color:var(--crimson)}
+  .result{display:grid;grid-template-columns:1fr 1fr;margin-top:8px}
+  .result > div{padding:0 10px}
+  .result > div + div{border-right:1px solid var(--rule)}
+  .result .name{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .result .name i{width:16px;height:4px;border-radius:2px;display:inline-block}
+  .result .num{font-size:24px;font-weight:800;line-height:1.2;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+  .result .num small{font-size:12px;font-weight:500;color:var(--muted)}
+  .result .sub{font-size:11.5px;color:var(--muted)}
+
+  .more h3{font-size:13px;color:var(--muted);font-weight:600;margin:16px 0 6px}
+  .tabs{display:none;gap:6px;margin-top:12px}
+  .tabs button{flex:1;font-size:13px;font-weight:600;border:1px solid var(--rule);background:#fff;border-radius:10px;padding:7px;cursor:pointer}
+  .tabs button[aria-pressed=true]{background:var(--slate);color:#fff;border-color:var(--slate)}
+  .empty{color:var(--muted);font-size:13.5px;margin:14px 0 0}
+  ol.trip{list-style:none;margin:12px 0 0;padding:0}
+  ol.trip li{position:relative;padding:0 26px 10px 0;font-size:14px}
+  ol.trip li::before{content:"";position:absolute;right:6px;top:8px;width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid var(--c,var(--zagros))}
+  ol.trip li::after{content:"";position:absolute;right:11px;top:20px;bottom:-6px;width:2px;background:var(--c,var(--zagros));opacity:.35}
+  ol.trip li:last-child::after{display:none}
+  ol.trip li:first-child::before{background:var(--zagros);border-color:var(--zagros)}
+  ol.trip li:last-child::before{background:var(--crimson);border-color:var(--crimson)}
+  ol.trip .leg{display:block;font-size:11.5px;color:var(--muted)}
+  ol.trip li.diff{font-weight:700}
+  details.levels{margin-top:8px;font-size:13px}
+  details.levels summary{cursor:pointer;color:var(--zagros);font-weight:600;padding:6px 0}
+  details.levels div{padding:4px 0;border-bottom:1px dashed var(--rule)}
+  details.levels b{color:var(--zagros);margin-left:4px}
+  .speed{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted)}
+  .speed input{flex:1;accent-color:var(--zagros)}
+  .key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px}
+  .key span{display:inline-flex;align-items:center;gap:6px}
+  .key i{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .key i.line{width:18px;height:4px;border-radius:2px}
+  .linkbtn{display:block;width:100%;margin-top:16px;padding:12px;border-radius:14px;border:1px solid var(--rule);background:#fff;
+    color:var(--zagros);font-weight:700;cursor:pointer}
+
+  /* ---------- learn screen ---------- */
+  .screen{position:fixed;inset:0;z-index:40;background:var(--paper);display:flex;flex-direction:column;
+    transform:translateY(100%);transition:transform .3s cubic-bezier(.2,.8,.2,1);visibility:hidden}
+  .screen.show{transform:none;visibility:visible}
+  .screen .appbar{position:static;flex:none}
+  .screen .body{flex:1;overflow:auto;padding:20px 18px calc(30px + var(--sb));-webkit-user-select:text;user-select:text}
+  .screen h2{font-size:21px;font-weight:800;color:var(--zagros);margin:0 0 10px}
+  .screen h3{font-size:16px;font-weight:700;color:var(--zagros);margin:22px 0 6px}
+  .screen p{font-family:var(--naskh);font-size:16.5px;line-height:1.95;margin:0 0 12px;max-width:62ch}
+  .screen .fine{font-family:var(--kufi);font-size:13px;color:var(--muted);line-height:1.7}
+  pre{direction:ltr;text-align:left;margin:6px 0 0;background:var(--zagros);color:#e4efe8;border-radius:16px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.65}
+  pre .c{color:#9fc4ad} pre .k{color:#f2c94c}
+
+  /* ---------- wide screens: side panel ---------- */
+  @media (min-width:900px){
+    .mapview{right:0;left:392px;bottom:0}
+    .sheet{left:16px;right:auto;top:calc(var(--bar) + var(--st) + 16px);bottom:16px;width:360px;height:auto;
+      border-radius:20px;transform:none!important;box-shadow:0 14px 40px -18px rgba(29,74,56,.45);border:1px solid var(--rule)}
+    .grab{display:none}
+    .peek{padding-top:16px}
+    .more{overflow:auto}
+    .screen{inset:auto;top:0;bottom:0;left:0;width:min(560px,100%);box-shadow:20px 0 50px rgba(0,0,0,.2);transform:translateX(-100%)}
+    .screen.show{transform:none}
+  }
+  @media (prefers-reduced-motion:reduce){ .ripple{display:none} .road-core,.sheet,.screen{transition:none} }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <svg class="logo" viewBox="0 0 108 108" aria-hidden="true">
+    <rect width="108" height="108" rx="26" fill="#2c6a52"/>
+    <g transform="translate(-2,1) translate(54,54) scale(.95) translate(-54,-54)">
+      <path fill="#1d4a38" d="M24,74 L40,52 L48,62 L58,48 L80,74 Z"/>
+      <path fill="#E6ECE6" d="M30,76 L46,52 L54,62 L64,46 L84,76 Z"/>
+      <path stroke="#E5A400" stroke-width="5" stroke-linecap="round" fill="none" d="M28,84 C38,76 48,82 56,72 S70,58 74,52"/>
+      <path fill="#C4122F" stroke="#fff" stroke-width="1.5" d="M74,24 C68,24 63.5,28.5 63.5,34 C63.5,41.5 74,52 74,52 C74,52 84.5,41.5 84.5,34 C84.5,28.5 80,24 74,24 Z"/>
+      <circle cx="74" cy="34" r="3.5" fill="#fff"/>
+    </g>
+  </svg>
+  <div class="ttl"><b>ڕێبەر</b><small>هەموو ڕێگاکان لێرەوە دەست پێدەکەن</small></div>
+  <button class="install" id="btnInstall">دابەزاندن</button>
+  <button class="iconbtn" id="btnLearn" aria-label="BFS چۆن کار دەکات؟">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r=".6" fill="currentColor"/></svg>
+  </button>
+</header>
+
+<main class="mapview">
+  <svg id="map" viewBox="0 0 1000 760" role="img" aria-label="نەخشەی شارەکان و ڕێگاکانی هەرێمی کوردستان"></svg>
+  <div class="zoom">
+    <button id="zIn" aria-label="نزیککردنەوە">+</button>
+    <button id="zOut" aria-label="دوورخستنەوە">−</button>
+    <button id="zFit" aria-label="هەموو نەخشەکە" style="font-size:15px">⤢</button>
+  </div>
+</main>
+
+<section class="sheet" id="sheet" aria-label="دۆزینەوەی ڕێگا">
+  <div class="grab" id="grab" role="button" aria-label="کردنەوە و داخستنی پانێڵ" tabindex="0"><span></span></div>
+  <div class="peek" id="peek">
+    <div class="od">
+      <span class="pin"></span>
+      <select id="from" aria-label="شاری دەستپێک"></select>
+      <button class="swap" id="btnSwap" aria-label="گۆڕینەوەی دەستپێک و مەبەست">⇅</button>
+      <span class="pin to"></span>
+      <select id="to" aria-label="شاری مەبەست"></select>
+    </div>
+    <div class="actions">
+      <button class="btn bfs" id="btnBFS">کەمترین وێستگە<small>BFS</small></button>
+      <button class="btn dj" id="btnDJ">کورترین ڕێگا<small>Dijkstra</small></button>
+    </div>
+    <div class="msg" id="status">دوو شار هەڵبژێرە، یان لەسەر نەخشەکە کلیک لە شارێک بکە.</div>
+    <div class="result" id="resultRow" hidden>
+      <div>
+        <div class="name"><i style="background:var(--sun)"></i>BFS</div>
+        <div class="num" id="bfsKm">–</div>
+        <div class="sub" id="bfsSub">کەمترین ژمارەی ڕێگا</div>
+      </div>
+      <div>
+        <div class="name"><i style="background:var(--crimson)"></i>Dijkstra</div>
+        <div class="num" id="djKm">–</div>
+        <div class="sub" id="djSub">کورترین دووری</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="more">
+    <div class="tabs" id="tabs" role="group" aria-label="پیشاندانی وێستگەکان">
+      <button data-r="bfs" aria-pressed="true">وێستگەکانی BFS</button>
+      <button data-r="dj" aria-pressed="false">وێستگەکانی Dijkstra</button>
+    </div>
+    <p class="empty" id="tripEmpty">کاتێک ڕێگایەک دۆزرایەوە، وێستگەکانی لێرە دەردەکەون.</p>
+    <ol class="trip" id="trip"></ol>
+    <details class="levels" id="levelsBox" hidden>
+      <summary>ئاستەکانی گەڕانی BFS</summary>
+      <div id="levels"></div>
+    </details>
+
+    <h3>خێرایی ئەنیمەیشن</h3>
+    <label class="speed">هێواش<input type="range" id="speed" min="1" max="10" value="6" aria-label="خێرایی ئەنیمەیشن">خێرا</label>
+
+    <h3>ڕەنگەکان</h3>
+    <div class="key">
+      <span><i style="background:var(--erbil)"></i>هەولێر</span>
+      <span><i style="background:var(--sul)"></i>سلێمانی</span>
+      <span><i style="background:var(--duhok)"></i>دهۆک</span>
+      <span><i style="background:var(--halabja)"></i>هەڵەبجە</span>
+      <span><i style="background:var(--kirkuk)"></i>کەرکووک</span>
+      <span><i class="line" style="background:var(--sun)"></i>ڕێگای BFS</span>
+      <span><i class="line" style="background:var(--crimson)"></i>ڕێگای Dijkstra</span>
+    </div>
+    <button class="linkbtn" id="btnLearn2">BFS چۆن کار دەکات؟</button>
+  </div>
+</section>
+
+<section class="screen" id="learn" aria-label="ڕوونکردنەوە" aria-hidden="true">
+  <header class="appbar">
+    <button class="iconbtn" id="btnClose" aria-label="داخستن">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <div class="ttl"><b>ڕوونکردنەوە</b><small>BFS و Dijkstra</small></div>
+  </header>
+  <div class="body">
+    <h2>BFS چۆن ڕێگا دەدۆزێتەوە؟</h2>
+    <p>شارەکان نۆدن و ڕێگاکانی نێوانیان ئێجن، کەواتە نەخشەکە گرافێکە. BFS لە شاری دەستپێکەوە دەست پێدەکات و سەرەتا هەموو ئەو شارانە دەپشکنێت کە ڕاستەوخۆ پێوەی بەستراون. پاشان ئەوانەی دوو ڕێگا دوورن، و بەم شێوەیە ئاستاو ئاست بڵاو دەبێتەوە. ژمارەی سەر هەر شارێک ئاستەکەی پیشان دەدات.</p>
+    <p>چونکە BFS هەموو ڕێگایەک بە یەک هەنگاو دادەنێت، ئەو ڕێگایە دەدۆزێتەوە کە کەمترین وێستگەی هەیە. بەڵام ڕێگاکان درێژییان جیاوازە، بۆیە کەمترین وێستگە هەمیشە کورترین کیلۆمەتر نییە. Dijkstra درێژی ڕێگاکان لەبەرچاو دەگرێت. بۆ نموونە زاخۆ بۆ هەڵەبجە تاقی بکەرەوە.</p>
+    <pre><span class="k">function</span> BFS(start, goal):
+    queue  = [start]
+    parent = {start: null}
+    level  = {start: 0}
+    <span class="k">while</span> queue <span class="k">not</span> empty:
+        city = queue.dequeue()      <span class="c">// FIFO</span>
+        <span class="k">if</span> city == goal:
+            <span class="k">return</span> path(parent, goal)
+        <span class="k">for</span> next <span class="k">in</span> roads[city]:
+            <span class="k">if</span> next <span class="k">not in</span> parent:
+                parent[next] = city
+                level[next]  = level[city] + 1
+                queue.enqueue(next)
+    <span class="k">return</span> "no route"</pre>
+
+    <h3>زیادکردن بۆ شاشەی سەرەکی</h3>
+    <p>بۆ ئەوەی ڕێبەر وەک ئەپ لەسەر مۆبایلەکەت دەربکەوێت: لە Chrome، مێنیووی <b>⋮</b> بکەرەوە و <b>Add to Home screen</b> یان <b>Install app</b> هەڵبژێرە. لە iPhone، لە Safari دوگمەی <b>Share</b> و پاشان <b>Add to Home Screen</b> دابگرە.</p>
+    <p class="fine">شوێنی شارەکان، چیاکان و ڕووبارەکان نزیکەیین. دووری ڕێگاکان بە نزیکەیی لە دووری ڕاستەوخۆ × ١.٣ هەژمار کراون. ئەم نەخشەیە بۆ فێربوونی ئەلگۆریتمەکانە، نەک بۆ ڕێنمایی گەشت.</p>
+  </div>
+</section>
+
+<script>
+const CITIES={
+  erbil:['هەولێر',36.19,44.01,'erbil',3], shaqlawa:['شەقڵاوە',36.40,44.32,'erbil',1], soran:['سۆران',36.65,44.54,'erbil',2],
+  choman:['چۆمان',36.64,44.89,'erbil',1], hajiomaran:['حاجی ئۆمەران',36.67,45.05,'erbil',1], koya:['کۆیە',36.08,44.63,'erbil',2],
+  mergasur:['مێرگەسۆر',36.84,44.31,'erbil',1], khabat:['خەبات',36.27,43.67,'erbil',1], taqtaq:['تەقتەق',35.89,44.59,'erbil',1],
+  harir:['هەریر',36.55,44.36,'erbil',1],
+  sulaymaniyah:['سلێمانی',35.56,45.44,'sul',3], ranya:['ڕانیە',36.25,44.88,'sul',2], qaladiza:['قەڵادزێ',36.18,45.12,'sul',1],
+  dukan:['دووکان',35.95,44.95,'sul',1], penjwen:['پێنجوێن',35.62,45.94,'sul',1], chamchamal:['چەمچەماڵ',35.53,44.83,'sul',2],
+  darbandikhan:['دەربەندیخان',35.11,45.69,'sul',1], kalar:['کەلار',34.63,45.32,'sul',2], kifri:['کفری',34.69,44.96,'sul',1],
+  mawat:['ماوەت',35.90,45.42,'sul',1], bazyan:['بازیان',35.60,45.15,'sul',1], arbat:['عەربەت',35.42,45.58,'sul',1],
+  qaradagh:['قەرەداغ',35.31,45.39,'sul',1],
+  halabja:['هەڵەبجە',35.18,45.99,'halabja',2], saidsadiq:['سەیدسادق',35.35,45.87,'halabja',1], khurmal:['خورماڵ',35.30,46.05,'halabja',1],
+  byara:['بیارە',35.23,46.12,'halabja',1],
+  duhok:['دهۆک',36.87,42.99,'duhok',3], zakho:['زاخۆ',37.14,42.68,'duhok',2], amadiya:['ئامێدی',37.09,43.49,'duhok',1],
+  akre:['ئاکرێ',36.74,43.89,'duhok',2], semel:['سێمێل',36.86,42.85,'duhok',1], bardarash:['بەردەڕەش',36.50,43.59,'duhok',1],
+  shekhan:['شێخان',36.69,43.35,'duhok',1], sarsing:['سەرسنگ',37.04,43.34,'duhok',1], barzan:['بارزان',36.92,44.05,'duhok',1],
+  bamarni:['بامەڕنێ',37.12,43.27,'duhok',1],
+  kirkuk:['کەرکووک',35.47,44.39,'kirkuk',3], altunkupri:['پردێ',35.75,44.14,'kirkuk',1]
+};
+const ROADS=[
+  ['zakho','semel'],['semel','duhok'],['zakho','bamarni'],['duhok','sarsing'],['sarsing','amadiya'],['sarsing','bamarni'],
+  ['amadiya','bamarni'],['duhok','shekhan'],['shekhan','akre'],['shekhan','bardarash'],['akre','bardarash'],
+  ['bardarash','khabat'],['khabat','erbil'],['akre','barzan'],['barzan','mergasur'],['mergasur','soran'],
+  ['erbil','shaqlawa'],['shaqlawa','harir'],['harir','soran'],['soran','choman'],['choman','hajiomaran'],
+  ['erbil','koya'],['erbil','altunkupri'],['altunkupri','kirkuk'],['koya','taqtaq'],['taqtaq','kirkuk'],
+  ['koya','ranya'],['ranya','qaladiza'],['ranya','dukan'],['dukan','sulaymaniyah'],['qaladiza','mawat'],['mawat','sulaymaniyah'],
+  ['dukan','chamchamal'],['kirkuk','chamchamal'],['chamchamal','bazyan'],['bazyan','sulaymaniyah'],['sulaymaniyah','penjwen'],
+  ['sulaymaniyah','arbat'],['arbat','saidsadiq'],['saidsadiq','halabja'],['halabja','khurmal'],['khurmal','byara'],
+  ['saidsadiq','penjwen'],['arbat','darbandikhan'],['darbandikhan','kalar'],['kalar','kifri'],['kifri','kirkuk'],
+  ['chamchamal','kalar'],['sulaymaniyah','qaradagh'],['qaradagh','darbandikhan'],['shaqlawa','koya']
+];
+
+
+
+/* ---------- geometry ---------- */
+const LON0=42.45, LON1=46.35, LAT0=34.45, LAT1=37.35, W=1000, H=760, PAD=40;
+const ky=(H-2*PAD)/(LAT1-LAT0), kx=ky*Math.cos(35.9*Math.PI/180);
+const X0=(W-(LON1-LON0)*kx)/2 - 40;
+const proj=(lat,lon)=>[X0+(lon-LON0)*kx, PAD+(LAT1-lat)*ky];
+const P=id=>proj(CITIES[id][1],CITIES[id][2]);
+function hav(a,b){ const R=6371, [ ,la1,lo1]=CITIES[a], [ ,la2,lo2]=CITIES[b];
+  const dLa=(la2-la1)*Math.PI/180, dLo=(lo2-lo1)*Math.PI/180;
+  const h=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h)); }
+const ADJ={}; Object.keys(CITIES).forEach(c=>ADJ[c]=[]);
+const EDGE={};
+ROADS.forEach(([a,b])=>{ const km=Math.round(hav(a,b)*1.3); ADJ[a].push({to:b,km}); ADJ[b].push({to:a,km}); EDGE[a+'|'+b]=EDGE[b+'|'+a]={a,b,km}; });
+Object.values(ADJ).forEach(l=>l.sort((x,y)=>CITIES[x.to][0].localeCompare(CITIES[y.to][0],'ckb')));
+
+/* ---------- svg ---------- */
+const $=id=>document.getElementById(id);
+const svg=$('map'), NS='http://www.w3.org/2000/svg';
+const mk=(tag,attrs,parent)=>{ const e=document.createElementNS(NS,tag); for(const a in attrs) e.setAttribute(a,attrs[a]); (parent||svg).appendChild(e); return e; };
+mk('rect',{x:-2000,y:-2000,width:5000,height:5000,fill:'#f8faf7'});
+const gTerrain=mk('g',{}), gRoads=mk('g',{}), gDj=mk('g',{}), gKm=mk('g',{}), gFx=mk('g',{}), gCities=mk('g',{});
+
+// terrain: stylised contour rings around the main ranges (approximate)
+const PEAKS=[
+  ['هەڵگورد',36.72,44.86,1.25],['قەندیل',36.30,45.18,1.15],['سەفین',36.36,44.26,.8],['گارە',37.00,43.38,.95],
+  ['پیرەمەگروون',35.78,45.20,.8],['متین',37.10,43.75,.9],['هەورامان',35.25,46.20,.9],['ئەزمڕ',35.62,45.55,.55]
+];
+let seed=7; const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647);
+PEAKS.forEach(([name,lat,lon,s])=>{
+  const [cx,cy]=proj(lat,lon); const ph=[rnd()*6,rnd()*6,rnd()*6];
+  for(let k=1;k<=7;k++){
+    const r=k*11*s; let d='';
+    for(let t=0;t<=64;t++){ const a=t/64*Math.PI*2;
+      const rr=r*(1+.18*Math.sin(3*a+ph[0])+.1*Math.sin(5*a+ph[1]+k*.3)+.06*Math.sin(2*a+ph[2]));
+      d+=(t?'L':'M')+(cx+rr*Math.cos(a)*1.25).toFixed(1)+','+(cy+rr*Math.sin(a)*.8).toFixed(1); }
+    mk('path',{d:d+'Z',class:'contour'+(k%3===0?' major':'')},gTerrain);
+  }
+  mk('text',{x:cx,y:cy+4,'text-anchor':'middle',class:'peak'},gTerrain).textContent='▲ '+name;
+});
+const line=pts=>pts.map((p,i)=>{const [x,y]=proj(...p); return (i?'L':'M')+x.toFixed(1)+','+y.toFixed(1);}).join('');
+// rivers (approximate courses)
+[
+  [[37.02,44.35],[36.93,44.08],[36.80,43.92],[36.56,43.76],[36.30,43.60],[36.02,43.36]],          // Great Zab
+  [[36.28,45.22],[36.13,45.02],[36.00,44.93],[35.88,44.63],[35.74,44.26],[35.55,43.85]],          // Little Zab
+  [[35.36,46.02],[35.22,45.86],[35.12,45.70],[34.88,45.50],[34.60,45.30]]                        // Sirwan
+].forEach(r=>mk('path',{d:line(r),class:'river'},gTerrain));
+// lakes
+function blob(lat,lon,rx,ry,rot){ const [cx,cy]=proj(lat,lon); let d='';
+  for(let t=0;t<=40;t++){ const a=t/40*Math.PI*2, w=1+.15*Math.sin(3*a+rot);
+    const x=rx*w*Math.cos(a), y=ry*w*Math.sin(a);
+    d+=(t?'L':'M')+(cx+x*Math.cos(rot)-y*Math.sin(rot)).toFixed(1)+','+(cy+x*Math.sin(rot)+y*Math.cos(rot)).toFixed(1); }
+  return d+'Z'; }
+mk('path',{d:blob(36.03,44.93,20,8,-.6),class:'lake'},gTerrain);
+mk('path',{d:blob(35.20,45.76,14,6,-.9),class:'lake'},gTerrain);
+
+const roadEl={}, djEl={};
+ROADS.forEach(([a,b])=>{ const [x1,y1]=P(a), [x2,y2]=P(b);
+  mk('line',{x1,y1,x2,y2,class:'road'},gRoads);
+  djEl[a+'|'+b]=djEl[b+'|'+a]=mk('line',{x1,y1,x2,y2,class:'road-dj'},gDj);
+  roadEl[a+'|'+b]=roadEl[b+'|'+a]=mk('line',{x1,y1,x2,y2,class:'road-core'},gRoads);
+  mk('text',{x:(x1+x2)/2,y:(y1+y2)/2-5,class:'km','text-anchor':'middle'},gKm).textContent=EDGE[a+'|'+b].km; });
+
+const GOV={erbil:'#b4533c',sul:'#2e7d7a',duhok:'#6e4e9e',halabja:'#7c8b2e',kirkuk:'#56707f'};
+const cityEl={};
+Object.entries(CITIES).forEach(([id,[name,,,gov,size]])=>{
+  const [x,y]=P(id); const g=mk('g',{class:'city',tabindex:0,role:'button','aria-label':name},gCities);
+  const r=size===3?10:size===2?7:5;
+  const ring=mk('circle',{cx:x,cy:y,r:r+6,fill:'none',stroke:'none','stroke-width':3},g);
+  const dot=mk('circle',{cx:x,cy:y,r,fill:GOV[gov],stroke:'#fff','stroke-width':2.5},g);
+  const lv=mk('text',{x,y:y+3.5,'text-anchor':'middle',class:'lv'},g);
+  const lab=mk('text',{x,y:y-r-7,'text-anchor':'middle',class:'n'+(size===3?' cap':'')},g);
+  lab.textContent=name;
+  cityEl[id]={g,dot,ring,lv,lab,r,x,y,size};
+  g.addEventListener('click',()=>{ if(!moved) pick(id); });
+  g.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(id);} });
+});
+
+/* ---------- selects & picking ---------- */
+const ids=Object.keys(CITIES).sort((a,b)=>CITIES[a][0].localeCompare(CITIES[b][0],'ckb'));
+['from','to'].forEach(s=>ids.forEach(id=>{ const o=document.createElement('option'); o.value=id; o.textContent=CITIES[id][0]; $(s).appendChild(o); }));
+$('from').value='zakho'; $('to').value='halabja';
+let pickTurn='from', busy=false, timers=[], routes={};
+function pick(id){
+  if(busy) return;
+  $(pickTurn).value=id; pickTurn=pickTurn==='from'?'to':'from';
+  clearAll(); markEnds();
+  setStatus(pickTurn==='to'?`دەستپێک: ${CITIES[id][0]}. ئێستا شاری مەبەست هەڵبژێرە.`:`مەبەست: ${CITIES[id][0]}. ئێستا یەکێک لە دوگمەکان دابگرە.`);
+}
+['from','to'].forEach(s=>$(s).addEventListener('change',()=>{ clearAll(); markEnds(); }));
+$('btnSwap').onclick=()=>{ const a=$('from').value; $('from').value=$('to').value; $('to').value=a; clearAll(); markEnds(); };
+
+function clearAll(){ setTimeout(syncResult,0);
+  timers.forEach(clearTimeout); timers=[]; routes={};
+  Object.values(roadEl).forEach(e=>e.setAttribute('class','road-core'));
+  Object.values(djEl).forEach(e=>e.setAttribute('class','road-dj'));
+  Object.values(cityEl).forEach(c=>{ c.ring.setAttribute('stroke','none'); c.lv.textContent=''; c.dot.setAttribute('stroke','#fff'); });
+  lod();
+  gFx.innerHTML=''; $('levels').innerHTML=''; $('levelsBox').hidden=true;
+  $('trip').innerHTML=''; $('tabs').style.display='none'; $('tripEmpty').hidden=false;
+  $('bfsKm').textContent='–'; $('djKm').textContent='–';
+  $('bfsSub').textContent='کەمترین ژمارەی ڕێگا'; $('djSub').textContent='کورترین دووری';
+}
+function markEnds(){
+  cityEl[$('from').value].ring.setAttribute('stroke','#1d4a38');
+  cityEl[$('to').value].ring.setAttribute('stroke','#c4122f');
+}
+function setStatus(m,cls){ const el=$('status'); el.className='msg'+(cls?' '+cls:''); el.textContent=m; }
+function setBusy(b){ busy=b; ['btnBFS','btnDJ','btnSwap','from','to'].forEach(i=>$(i).disabled=b); }
+const delay=()=>[0,720,540,420,320,240,170,120,80,45,15][+$('speed').value];
+const pathKm=p=>p.slice(1).reduce((s,c,i)=>s+EDGE[p[i]+'|'+c].km,0);
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- algorithms ---------- */
+function bfs(s,g){
+  const parent={[s]:null}, level={[s]:0}, events=[], queue=[s]; let head=0;
+  while(head<queue.length){
+    const cur=queue[head++]; events.push({t:'deq',c:cur});
+    if(cur===g) break;
+    for(const {to} of ADJ[cur]) if(!(to in parent)){ parent[to]=cur; level[to]=level[cur]+1; queue.push(to); events.push({t:'disc',from:cur,c:to,lv:level[to]}); }
+  }
+  const path=[]; if(g in parent){ let c=g; while(c!==null){ path.push(c); c=parent[c]; } path.reverse(); }
+  return {events,path};
+}
+function dijkstra(s,g){
+  const dist={}, parent={}, done=new Set(); Object.keys(CITIES).forEach(c=>dist[c]=Infinity); dist[s]=0; parent[s]=null;
+  while(true){
+    let u=null; for(const c in dist) if(!done.has(c)&&(u===null||dist[c]<dist[u])) u=c;
+    if(u===null||dist[u]===Infinity) break; done.add(u); if(u===g) break;
+    for(const {to,km} of ADJ[u]) if(dist[u]+km<dist[to]){ dist[to]=dist[u]+km; parent[to]=u; }
+  }
+  const path=[]; if(dist[g]<Infinity){ let c=g; while(c!==null){ path.push(c); c=parent[c]; } path.reverse(); }
+  return {path,km:dist[g]};
+}
+
+/* ---------- drawing routes ---------- */
+function drawRoutes(){
+  Object.values(roadEl).forEach(e=>e.setAttribute('class','road-core'));
+  Object.values(djEl).forEach(e=>e.setAttribute('class','road-dj'));
+  if(routes.bfs) for(let i=1;i<routes.bfs.length;i++) roadEl[routes.bfs[i-1]+'|'+routes.bfs[i]].setAttribute('class','road-core bfs');
+  if(routes.dj) for(let i=1;i<routes.dj.length;i++) djEl[routes.dj[i-1]+'|'+routes.dj[i]].setAttribute('class','road-dj on');
+  markEnds(); lod();
+}
+let showing='bfs';
+function renderTrip(){
+  const has=Object.keys(routes); if(!has.length) return; $('tripEmpty').hidden=true;
+  if(!routes[showing]) showing=has[0];
+  $('tabs').style.display= has.length===2?'flex':'none';
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===showing));
+  const p=routes[showing], other=routes[showing==='bfs'?'dj':'bfs'];
+  const col= showing==='bfs' ? '#e5a400' : '#c4122f';
+  $('trip').innerHTML=p.map((c,i)=>{
+    const leg= i? `${EDGE[p[i-1]+'|'+c].km} کم لە ${CITIES[p[i-1]][0]}ەوە` : 'دەستپێک';
+    const diff= other && !other.includes(c) ? ' class="diff"' : '';
+    return `<li${diff} style="--c:${col}">${CITIES[c][0]}<span class="leg">${leg}</span></li>`; }).join('');
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{ showing=b.dataset.r; renderTrip(); });
+
+function ripple(id){ if(reduced) return; const c=cityEl[id]; const r=mk('circle',{cx:c.x,cy:c.y,r:c.r+4,class:'ripple'},gFx); setTimeout(()=>r.remove(),950); }
+
+function runBFS(){
+  const s=$('from').value, g=$('to').value;
+  if(s===g){ setStatus('دەستپێک و مەبەست هەمان شارن. شارێکی تر هەڵبژێرە.','bad'); return; }
+  const keepDJ=routes.dj && routes.dj[0]===s && routes.dj.at(-1)===g ? routes.dj : null;
+  const djTxt=[$('djKm').innerHTML,$('djSub').textContent];
+  clearAll(); markEnds(); setBusy(true);
+  if(keepDJ){ routes.dj=keepDJ; $('djKm').innerHTML=djTxt[0]; $('djSub').textContent=djTxt[1]; }
+  const {events,path}=bfs(s,g);
+  setStatus('BFS ئاستاو ئاست دەگەڕێت…');
+  const levels={}; let t=0;
+  cityEl[s].lv.textContent='0'; ripple(s);
+  events.forEach(ev=>{
+    if(ev.t==='disc') t+=delay();
+    timers.push(setTimeout(()=>{
+      if(ev.t==='deq'){ cityEl[ev.c].dot.setAttribute('stroke','#e5a400'); return; }
+      roadEl[ev.from+'|'+ev.c].setAttribute('class','road-core explored');
+      cityEl[ev.c].lv.textContent=ev.lv; ripple(ev.c);
+      (levels[ev.lv]=levels[ev.lv]||[]).push(CITIES[ev.c][0]);
+      $('levelsBox').hidden=false;
+      $('levels').innerHTML=`<div><b>ئاستی 0</b>${CITIES[s][0]}</div>`+Object.keys(levels).map(l=>`<div><b>ئاستی ${l}</b>${levels[l].join('، ')}</div>`).join('');
+    },t));
+  });
+  timers.push(setTimeout(()=>{
+    Object.values(cityEl).forEach(c=>c.dot.setAttribute('stroke','#fff'));
+    Object.values(roadEl).forEach(e=>e.setAttribute('class','road-core'));
+    routes.bfs=path; showing='bfs'; drawRoutes(); renderTrip(); setBusy(false);
+    const km=pathKm(path);
+    $('bfsKm').innerHTML=`${km} <small>km</small>`; $('bfsSub').textContent=`${path.length-1} ڕێگا، ${path.length-2} وێستگە`;
+    compare();
+  },t+delay()+200));
+}
+function runDJ(){
+  const s=$('from').value, g=$('to').value;
+  if(s===g){ setStatus('دەستپێک و مەبەست هەمان شارن. شارێکی تر هەڵبژێرە.','bad'); return; }
+  const keepBFS=routes.bfs && routes.bfs[0]===s && routes.bfs.at(-1)===g ? routes.bfs : null;
+  const bfsTxt=[$('bfsKm').innerHTML,$('bfsSub').textContent];
+  clearAll(); markEnds();
+  if(keepBFS){ routes.bfs=keepBFS; $('bfsKm').innerHTML=bfsTxt[0]; $('bfsSub').textContent=bfsTxt[1]; $('levelsBox').hidden=true; }
+  const r=dijkstra(s,g); routes.dj=r.path; showing='dj';
+  $('djKm').innerHTML=`${r.km} <small>km</small>`; $('djSub').textContent=`${r.path.length-1} ڕێگا، ${r.path.length-2} وێستگە`;
+  drawRoutes(); renderTrip(); compare();
+}
+function compare(){ setTimeout(syncResult,0);
+  const b=routes.bfs, d=routes.dj;
+  if(b&&d){
+    const kb=pathKm(b), kd=pathKm(d);
+    if(b.join()===d.join()) setStatus('هەردوو ئەلگۆریتم هەمان ڕێگایان دۆزییەوە.','ok');
+    else{
+      const hops= b.length===d.length ? `هەردووکیان ${b.length-1} ڕێگایان هەیە` : `BFS ${b.length-1} ڕێگای هەیە و Dijkstra ${d.length-1}`;
+      setStatus(`ڕێگاکان جیاوازن. ${hops}، بەڵام ڕێگای Dijkstra ${kb-kd} کم کورترە. ئەو شارانەی بە ئەستوور نووسراون تەنها لە یەکێک لە ڕێگاکاندان.`,'ok');
+    }
+  } else if(b) setStatus(`BFS ڕێگایەکی ${b.length-1} هەنگاوی دۆزییەوە. Dijkstra تاقی بکەرەوە بۆ بەراورد.`,'ok');
+  else if(d) setStatus(`Dijkstra کورترین ڕێگای ${pathKm(d)} کم دۆزییەوە. BFS تاقی بکەرەوە بۆ بەراورد.`,'ok');
+}
+$('btnBFS').onclick=runBFS; $('btnDJ').onclick=runDJ;
+
+/* ---------- pan & zoom (with level of detail) ---------- */
+// the map always fills its box: the viewBox takes the box's aspect ratio
+const BOX={x:55,y:22,w:815,h:700};
+function boxAspect(){ const r=svg.getBoundingClientRect(); return (r.height||760)/(r.width||1000); }
+function home(){ const A=boxAspect(); let w=BOX.w, h=w*A; if(h<BOX.h){ h=BOX.h; w=h/A; }
+  return {x:BOX.x+BOX.w/2-w/2, y:BOX.y+BOX.h/2-h/2, w, h}; }
+let vb=home(), moved=false;
+const applyVB=()=>{ svg.setAttribute('viewBox',`${vb.x} ${vb.y} ${vb.w} ${vb.h}`); lod(); };
+function lod(){
+  const px=svg.getBoundingClientRect().width||1000, f=vb.w/px;
+  svg.style.setProperty('--f',Math.max(.6,Math.min(f,2.2)).toFixed(2));
+  const onRoute=new Set([...(routes.bfs||[]),...(routes.dj||[]),$('from').value,$('to').value]);
+  const rs=Math.max(1,Math.min(f,1.8));
+  Object.entries(cityEl).forEach(([id,c])=>{
+    const screen=c.size===3?16:c.size===2?13.5:12;
+    c.lab.setAttribute('font-size',(screen*f).toFixed(1));
+    const r=c.r*rs+(onRoute.has(id)&&(routes.bfs||routes.dj)?1.5*rs:0);
+    c.dot.setAttribute('r',r.toFixed(1)); c.ring.setAttribute('r',(r+6*rs).toFixed(1));
+    c.lv.setAttribute('font-size',(9.5*rs).toFixed(1)); c.lv.setAttribute('y',(c.y+3.3*rs).toFixed(1));
+    c.lab.setAttribute('y',(c.y-r-6*rs).toFixed(1));
+    c.lab.style.display=(c.size>=2||f<1.45||onRoute.has(id))?'':'none';
+  });
+  gKm.style.display=f>1.45?'none':'';
+  gKm.querySelectorAll('text').forEach(t=>t.setAttribute('font-size',(10*f).toFixed(1)));
+  gTerrain.querySelectorAll('.peak').forEach(t=>{ t.setAttribute('font-size',(11*f).toFixed(1)); t.style.display=f>1.6?'none':''; });
+}
+function zoom(fz,cx=vb.x+vb.w/2,cy=vb.y+vb.h/2){
+  const A=vb.h/vb.w, nw=Math.min(W*1.2,Math.max(W/6,vb.w*fz)), nh=nw*A;
+  vb.x=cx-(cx-vb.x)*nw/vb.w; vb.y=cy-(cy-vb.y)*nh/vb.h; vb.w=nw; vb.h=nh; applyVB(); }
+$('zIn').onclick=()=>zoom(.7); $('zOut').onclick=()=>zoom(1/.7); $('zFit').onclick=()=>{vb=home();applyVB();};
+let lastSize='';
+new ResizeObserver(()=>{ const r=svg.getBoundingClientRect(); const key=Math.round(r.width)+'x'+Math.round(r.height);
+  if(key===lastSize||!r.width) return; const first=!lastSize; lastSize=key;
+  if(first){ vb=home(); } else { const cy=vb.y+vb.h/2, A=r.height/r.width; vb.h=vb.w*A; vb.y=cy-vb.h/2; }
+  applyVB(); }).observe(svg);
+svg.addEventListener('wheel',e=>{ e.preventDefault(); const pt=toSvg(e); zoom(e.deltaY<0?.85:1/.85,pt.x,pt.y); },{passive:false});
+function toSvg(e){ const r=svg.getBoundingClientRect(); return {x:vb.x+(e.clientX-r.left)/r.width*vb.w, y:vb.y+(e.clientY-r.top)/r.height*vb.h}; }
+let drag=null, pinch=null; const pts=new Map();
+svg.addEventListener('pointerdown',e=>{ pts.set(e.pointerId,e); moved=false;
+  if(pts.size===1) drag={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y};
+  if(pts.size===2){ const [a,b]=[...pts.values()]; pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),w:vb.w}; drag=null; } });
+svg.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,e);
+  const r=svg.getBoundingClientRect();
+  if(pinch&&pts.size===2){ const [a,b]=[...pts.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    const pt=toSvg({clientX:(a.clientX+b.clientX)/2,clientY:(a.clientY+b.clientY)/2}); zoom((pinch.w*pinch.d/d)/vb.w,pt.x,pt.y); moved=true; return; }
+  if(drag){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>5){ moved=true; svg.classList.add('drag'); if(!svg.hasPointerCapture(e.pointerId)) svg.setPointerCapture(e.pointerId); }
+    if(moved){ vb.x=drag.vx-(e.clientX-drag.x)/r.width*vb.w; vb.y=drag.vy-(e.clientY-drag.y)/r.height*vb.h; applyVB(); } } });
+['pointerup','pointercancel'].forEach(t=>svg.addEventListener(t,e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch=null;
+  if(!pts.size){ drag=null; svg.classList.remove('drag'); setTimeout(()=>moved=false,0); } }));
+
+markEnds();
+
+function syncResult(){ $('resultRow').hidden=!(routes.bfs||routes.dj); }
+/* ---------- bottom sheet (phones) ---------- */
+const sheet=$('sheet'), grab=$('grab');
+const wide=()=>matchMedia('(min-width:900px)').matches;
+function setPeek(){ const h=$('peek').offsetHeight+grab.offsetHeight; document.documentElement.style.setProperty('--peek',h+'px'); }
+new ResizeObserver(setPeek).observe($('peek')); setPeek();
+function openSheet(o){ sheet.classList.toggle('open',o); }
+let sd=null;
+grab.addEventListener('pointerdown',e=>{ if(wide()) return; sd={y:e.clientY,t:Date.now(),open:sheet.classList.contains('open'),moved:false};
+  grab.setPointerCapture(e.pointerId); sheet.classList.add('dragging'); });
+grab.addEventListener('pointermove',e=>{ if(!sd) return; const dy=e.clientY-sd.y; if(Math.abs(dy)>4) sd.moved=true;
+  const full=sheet.offsetHeight, peek=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--peek'));
+  const base=sd.open?0:full-peek; const y=Math.max(0,Math.min(full-peek,base+dy));
+  sheet.style.transform=`translateY(${y}px)`; });
+['pointerup','pointercancel'].forEach(t=>grab.addEventListener(t,e=>{ if(!sd) return;
+  const dy=e.clientY-sd.y; sheet.classList.remove('dragging'); sheet.style.transform='';
+  if(!sd.moved) openSheet(!sd.open); else openSheet(dy<-50?true:dy>50?false:sd.open); sd=null; }));
+grab.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openSheet(!sheet.classList.contains('open')); } });
+
+/* ---------- learn screen ---------- */
+const learn=$('learn');
+function showLearn(s){ learn.classList.toggle('show',s); learn.setAttribute('aria-hidden',String(!s));
+  if(s){ try{ history.pushState({learn:1},''); }catch(e){} } }
+$('btnLearn').onclick=()=>showLearn(true); $('btnLearn2').onclick=()=>showLearn(true);
+$('btnClose').onclick=()=>{ if(history.state&&history.state.learn){ history.back(); } else showLearn(false); };
+window.addEventListener('popstate',()=>showLearn(false));
+
+/* ---------- install as an app (when hosted on its own site) ---------- */
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; $('btnInstall').style.display='inline-block'; });
+$('btnInstall').onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); try{ await installEvt.userChoice; }catch(e){} installEvt=null; $('btnInstall').style.display='none'; };
+if('serviceWorker' in navigator && location.protocol==='https:' && !/claude|anthropic/.test(location.hostname)){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+</script>
+</body>
+</html>
